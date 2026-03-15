@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ultimate Stem Lab Launcher Redirect</title>
+  <meta http-equiv="refresh" content="0; url=./stem_lab_queue_builder.html" />
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #131a2e;
+      --border: #2b3761;
+      --text: #eef2ff;
+      --muted: #9fb0d9;
+      --accent: #78a7ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: linear-gradient(180deg, #090d19 0%, #0e1426 100%);
+      color: var(--text);
+      font-family: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+
+    .panel {
+      max-width: 720px;
+      padding: 24px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: rgba(19, 26, 46, 0.92);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    }
+
+    h1 { margin: 0 0 12px; }
+    p { color: var(--muted); line-height: 1.5; }
+    a { color: var(--accent); }
+    code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+  </style>
+</head>
+<body>
+  <section class="panel">
+    <h1>Launcher UI Moved</h1>
+    <p>
+      <code>stem_lab_queue_form.html</code> is now a deprecated entry point.
+      The maintained queue UI lives in <a href="./stem_lab_queue_builder.html">stem_lab_queue_builder.html</a>.
+    </p>
+    <p>
+      For the intended day-to-day flow, launch <code>stem_lab_launcher.py</code> and use the local page it serves.
+    </p>
+  </section>
+</body>
+</html>

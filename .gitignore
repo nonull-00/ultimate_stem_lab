@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Runtime / generated project data
+ultimate_stem_lab/projects/
+ultimate_stem_lab/tmp/
+ultimate_stem_lab/logs/
+*.log
+
+# Launcher runtime files
+ultimate_stem_lab_queue.json
+_stem_lab_queue_builder_served.html
+
+# Local bootstrap output
+ultimate_stem_lab/tools/ffmpeg/
+ultimate_stem_lab/tmp/ffmpeg_extract/
+
+# OS / editor
+.DS_Store
+Thumbs.db

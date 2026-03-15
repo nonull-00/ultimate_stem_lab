@@ -1,0 +1,10 @@
+yt-dlp
+demucs
+audio-separator
+numpy
+scipy
+soundfile
+librosa
+tqdm
+rich
+torchcodec

@@ -1,0 +1,10 @@
+{
+  "default_output_format": "mp3",
+  "default_sample_rate": 44100,
+  "default_models": [
+    "htdemucs_6s",
+    "htdemucs_ft"
+  ],
+  "default_shifts": 1,
+  "default_overlap": 0.25
+}

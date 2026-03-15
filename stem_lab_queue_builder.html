@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ultimate Stem Lab Launcher Queue</title>
+  <style>
+    :root {
+      --bg: #09111d;
+      --panel: rgba(16, 25, 40, 0.94);
+      --panel-alt: #14233c;
+      --line: #284264;
+      --text: #eef4ff;
+      --muted: #a6bbd8;
+      --accent: #79b8ff;
+      --good: #73d4a7;
+      --warn: #ffcb7d;
+      --danger: #f3a2a2;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(121, 184, 255, 0.14), transparent 26%),
+        radial-gradient(circle at top right, rgba(115, 212, 167, 0.12), transparent 24%),
+        linear-gradient(180deg, #08101b 0%, #0c1625 100%);
+    }
+
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
+    }
+
+    .hero p {
+      color: var(--muted);
+      max-width: 720px;
+      margin-top: 10px;
+      line-height: 1.45;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(121, 184, 255, 0.35);
+      background: rgba(121, 184, 255, 0.12);
+      color: #d9e9ff;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .panel p,
+    .small {
+      color: var(--muted);
+    }
+
+    .row,
+    .row-3,
+    .checks {
+      display: grid;
+      gap: 12px;
+    }
+
+    .row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .checks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel-alt);
+      color: var(--text);
+      font: inherit;
+      padding: 12px 14px;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .output {
+      min-height: 170px;
+      white-space: pre-wrap;
+    }
+
+    .checkbox {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      background: var(--panel-alt);
+      border-radius: 14px;
+      padding: 11px 12px;
+      color: var(--text);
+    }
+
+    .checkbox input {
+      margin: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      appearance: none;
+      cursor: pointer;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel-alt);
+      color: var(--text);
+      font: inherit;
+      padding: 11px 14px;
+    }
+
+    button.primary {
+      background: linear-gradient(180deg, #7bb8ff, #4e84e3);
+      border-color: #4e84e3;
+      color: white;
+      font-weight: 700;
+    }
+
+    button.good {
+      background: linear-gradient(180deg, #8adcb4, #57bc90);
+      border-color: #57bc90;
+      color: #07120d;
+      font-weight: 700;
+    }
+
+    button.danger {
+      background: linear-gradient(180deg, #f4aeae, #d77474);
+      border-color: #d77474;
+      color: #240b0b;
+      font-weight: 700;
+    }
+
+    .queue-list {
+      display: grid;
+      gap: 12px;
+      max-height: 560px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .track-card {
+      background: var(--panel-alt);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .track-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 12px;
+    }
+
+    .track-title {
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .mono {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    .footer-panel {
+      margin-top: 20px;
+    }
+
+    @media (max-width: 980px) {
+      .grid,
+      .row,
+      .row-3,
+      .checks {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1>Ultimate Stem Lab Queue</h1>
+        <p>Queue one or more YouTube tracks, lock in the run settings up front, and start the full local pipeline from the launcher. The goal is a clean Windows-first flow that ends in audition-ready winners and alternates.</p>
+      </div>
+      <div class="pill">Launcher Primary Flow</div>
+    </div>
+
+    <div class="grid">
+      <section class="panel">
+        <div>
+          <h2>Track entry</h2>
+          <p>Paste one link per line or drop in mixed text. The page strips playlist noise and keeps the canonical video URL.</p>
+        </div>
+
+        <div>
+          <label for="rawUrls" title="Paste one or more YouTube links. Each valid link becomes a queued job and the pipeline will download and process it locally.">YouTube URL(s)</label>
+          <textarea id="rawUrls" title="Paste one or more YouTube links. Each valid link becomes a queued job and the pipeline will download and process it locally." placeholder="https://www.youtube.com/watch?v=VIDEO_ID"></textarea>
+          <div class="small">One URL per line, or paste a block of text that contains YouTube links.</div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="pythonPath" title="Choose which Python executable the launcher will use when it starts run_stem_lab.py. Normally this should stay on the project venv.">Python path</label>
+            <input id="pythonPath" title="Choose which Python executable the launcher will use when it starts run_stem_lab.py. Normally this should stay on the project venv." type="text" value=".\ultimate_stem_lab\.venv\Scripts\python.exe" />
+          </div>
+          <div>
+            <label for="scriptPath" title="Path to the pipeline entrypoint the launcher should run for each queued track. Leave this on run_stem_lab.py unless you are debugging another script.">Run script</label>
+            <input id="scriptPath" title="Path to the pipeline entrypoint the launcher should run for each queued track. Leave this on run_stem_lab.py unless you are debugging another script." type="text" value=".\run_stem_lab.py" />
+          </div>
+        </div>
+
+        <div>
+          <h3>Default run settings</h3>
+          <p class="small">These settings are copied into each queued job.</p>
+        </div>
+
+        <div class="checks">
+          <label class="checkbox" title="A fast general-purpose Demucs model. Good default for quick QA and shorter turnaround."><input type="checkbox" class="model-check" value="htdemucs_6s" checked> htdemucs_6s</label>
+          <label class="checkbox" title="A slower fine-tuned Demucs model that can improve separation quality, but it usually increases processing time noticeably."><input type="checkbox" class="model-check" value="htdemucs_ft" checked> htdemucs_ft</label>
+        </div>
+
+        <div class="row-3">
+          <div>
+            <label for="shifts" title="Higher shifts can improve Demucs quality, but they multiply processing time. For QA, keep this at 1.">Shifts</label>
+            <input id="shifts" title="Higher shifts can improve Demucs quality, but they multiply processing time. For QA, keep this at 1." type="number" min="1" step="1" value="1" />
+          </div>
+          <div>
+            <label for="overlap" title="Overlap controls how much adjacent audio chunks blend together during Demucs splitting. Higher values may reduce artifacts but increase processing time and memory use.">Overlap</label>
+            <input id="overlap" title="Overlap controls how much adjacent audio chunks blend together during Demucs splitting. Higher values may reduce artifacts but increase processing time and memory use." type="number" min="0" max="0.99" step="0.01" value="0.25" />
+          </div>
+          <div>
+            <label for="sampleRate" title="This sets the WAV sample rate used for the working file before stem separation. 44100 is a practical default for most music sources.">Sample rate</label>
+            <input id="sampleRate" title="This sets the WAV sample rate used for the working file before stem separation. 44100 is a practical default for most music sources." type="number" min="8000" step="1000" value="44100" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="demucsDevice" title="Choose where Demucs runs. Auto lets Demucs decide, cpu keeps everything on the processor, and cuda uses an NVIDIA GPU if available.">Demucs device</label>
+            <select id="demucsDevice" title="Choose where Demucs runs. Auto lets Demucs decide, cpu keeps everything on the processor, and cuda uses an NVIDIA GPU if available.">
+              <option value="" selected>auto</option>
+              <option value="cpu">cpu</option>
+              <option value="cuda">cuda</option>
+            </select>
+          </div>
+          <div>
+            <label for="demucsJobs" title="More Demucs jobs can use more CPU cores in parallel and speed up processing, but they also increase memory pressure. Start small and scale up.">Demucs jobs</label>
+            <input id="demucsJobs" title="More Demucs jobs can use more CPU cores in parallel and speed up processing, but they also increase memory pressure. Start small and scale up." type="number" min="1" step="1" value="" placeholder="auto" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="outputFormat" title="This controls how the separated stems are saved. MP3 is smaller and faster for QA, while WAV and FLAC preserve more detail at the cost of larger files.">Output format</label>
+            <select id="outputFormat" title="This controls how the separated stems are saved. MP3 is smaller and faster for QA, while WAV and FLAC preserve more detail at the cost of larger files.">
+              <option value="mp3" selected>mp3</option>
+              <option value="wav">wav</option>
+              <option value="flac">flac</option>
+            </select>
+          </div>
+          <div>
+            <label for="scoreMode" title="Integrated scoring analyzes the generated stems and chooses winners plus alternates automatically. Skipping scoring is faster and better for quick pipeline QA.">Scoring mode</label>
+            <select id="scoreMode" title="Integrated scoring analyzes the generated stems and chooses winners plus alternates automatically. Skipping scoring is faster and better for quick pipeline QA.">
+              <option value="integrated" selected>integrated scoring</option>
+              <option value="skip">skip scoring</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="checks">
+          <label class="checkbox" title="QA mode applies the project&apos;s fast test preset: one fast model, MP3 output, and no scoring or audition report. Use this for fast validation runs."><input id="qaMode" type="checkbox"> fast QA mode</label>
+          <label class="checkbox" title="Generate the HTML audition report after scoring finishes. Useful for review, but slower than a pure split-only QA run."><input id="generateAudition" type="checkbox" checked> generate audition report</label>
+          <label class="checkbox" title="Automatically opens the audition report after it is generated. This is convenient for review but unnecessary during speed-focused QA."><input id="openAudition" type="checkbox"> auto-open audition report</label>
+          <label class="checkbox" title="Normalizes pasted YouTube URLs into a clean canonical watch link before queueing. This reduces noise from playlists, tracking params, and alternate URL forms."><input id="cleanLink" type="checkbox" checked> normalize URL before queueing</label>
+        </div>
+
+        <div class="toolbar">
+          <button id="quickQaBtn" title="Loads the project&apos;s shared fast QA preset for the current form.">Fast QA preset</button>
+          <button id="cpuFastBtn" title="Loads a CPU-oriented fast preset with QA mode enabled and a suggested multi-core job count.">CPU fast preset</button>
+          <button id="gpuFastBtn" title="Loads a GPU-oriented fast preset with QA mode enabled and the Demucs device set to cuda.">GPU fast preset</button>
+          <button class="primary" id="normalizeBtn" title="Clean the pasted text into canonical YouTube watch URLs before queueing.">Normalize links</button>
+          <button class="good" id="queueBtn" title="Create queued jobs from the current URLs and default settings.">Add to queue</button>
+          <button id="loadExampleBtn" title="Fill the form with example YouTube links so you can test the queue flow quickly.">Load example</button>
+          <button class="danger" id="clearFormBtn" title="Reset the pasted URLs and current form values on this panel.">Clear form</button>
+        </div>
+
+        <div>
+          <label for="normalizedOutput" title="Shows the cleaned URLs or preset summary that will be copied into queued jobs.">Normalized result</label>
+          <textarea id="normalizedOutput" title="Shows the cleaned URLs or preset summary that will be copied into queued jobs." class="output mono" readonly></textarea>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div>
+          <h2>Queue</h2>
+          <p><span id="queueCount">0</span> queued track(s). Start them from the launcher status panel or export the same jobs as PowerShell commands.</p>
+        </div>
+
+        <div class="toolbar">
+          <button id="saveQueueBtn" title="Export the current queue as JSON so it can be saved, shared, or reloaded later.">Download queue JSON</button>
+          <button id="loadQueueBtn" title="Import a saved queue JSON file back into the launcher UI.">Load queue JSON</button>
+          <input id="queueFileInput" type="file" accept="application/json" style="display:none" />
+          <button class="primary" id="commandsBtn" title="Generate equivalent PowerShell commands for every queued job using the current launcher contract.">Generate PowerShell commands</button>
+          <button class="danger" id="clearQueueBtn" title="Remove every queued job from the current session.">Clear queue</button>
+        </div>
+
+        <div id="queueList" class="queue-list"></div>
+
+        <div>
+          <label for="commandOutput">Generated PowerShell</label>
+          <textarea id="commandOutput" title="Shows the PowerShell commands that match the current queued jobs and settings." class="output mono" readonly></textarea>
+          <div class="small">When this page is served by <span class="mono">stem_lab_launcher.py</span>, the launcher can also run the queue directly and stream status back into the page.</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel footer-panel">
+      <h2>Launcher-first flow</h2>
+      <p>The intended user path is: bootstrap once, run <span class="mono">stem_lab_launcher.py</span>, queue songs here, start the queue, and review winners plus alternates in the generated audition report.</p>
+      <div class="small">This page keeps multi-song queueing, JSON import/export, command generation, and launcher-backed execution aligned with the current CLI contract.</div>
+    </section>
+  </div>
+
+  <script>
+    const state = { queue: [] };
+    window.state = state;
+
+    function extractYouTubeUrls(text) {
+      const regex = /(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?[^\s]+|youtu\.be\/[A-Za-z0-9_-]+[^\s]*))/gi;
+      return [...new Set((text.match(regex) || []).map((value) => value.trim()))];
+    }
+
+    function normalizeYouTubeUrl(input) {
+      try {
+        const raw = input.trim();
+        if (!raw) return null;
+        const url = new URL(raw);
+        const host = url.hostname.replace(/^www\./, "");
+        let videoId = "";
+
+        if (host === "youtu.be") {
+          videoId = url.pathname.replace(/^\//, "").split("/")[0];
+        } else if (host === "youtube.com" || host === "m.youtube.com") {
+          if (url.pathname === "/watch") {
+            videoId = url.searchParams.get("v") || "";
+          } else if (url.pathname.startsWith("/shorts/")) {
+            videoId = url.pathname.split("/")[2] || "";
+          } else if (url.pathname.startsWith("/embed/")) {
+            videoId = url.pathname.split("/")[2] || "";
+          }
+        }
+
+        if (!videoId) return null;
+        return `https://www.youtube.com/watch?v=${videoId}`;
+      } catch {
+        return null;
+      }
+    }
+
+    function selectedModels() {
+      return [...document.querySelectorAll(".model-check:checked")].map((node) => node.value);
+    }
+
+    function currentDefaults() {
+      return {
+        pythonPath: document.getElementById("pythonPath").value.trim(),
+        scriptPath: document.getElementById("scriptPath").value.trim(),
+        models: selectedModels(),
+        shifts: document.getElementById("shifts").value.trim(),
+        overlap: document.getElementById("overlap").value.trim(),
+        sampleRate: document.getElementById("sampleRate").value.trim(),
+        outputFormat: document.getElementById("outputFormat").value,
+        demucsDevice: document.getElementById("demucsDevice").value,
+        demucsJobs: document.getElementById("demucsJobs").value.trim(),
+        scoreMode: document.getElementById("scoreMode").value,
+        qaMode: document.getElementById("qaMode").checked,
+        generateAudition: document.getElementById("generateAudition").checked,
+        openAudition: document.getElementById("openAudition").checked,
+      };
+    }
+
+    function setModelSelection(models) {
+      const wanted = new Set(models);
+      document.querySelectorAll(".model-check").forEach((node) => {
+        node.checked = wanted.has(node.value);
+      });
+    }
+
+    function suggestedCpuJobs() {
+      const cores = Number(navigator.hardwareConcurrency || 4);
+      return String(Math.max(2, Math.min(8, cores > 2 ? cores - 1 : cores)));
+    }
+
+    function applyQuickQaPreset() {
+      setModelSelection(["htdemucs_6s"]);
+      document.getElementById("shifts").value = "1";
+      document.getElementById("overlap").value = "0.25";
+      document.getElementById("sampleRate").value = "44100";
+      document.getElementById("outputFormat").value = "mp3";
+      document.getElementById("demucsDevice").value = "";
+      document.getElementById("demucsJobs").value = "";
+      document.getElementById("scoreMode").value = "skip";
+      document.getElementById("qaMode").checked = true;
+      document.getElementById("generateAudition").checked = false;
+      document.getElementById("openAudition").checked = false;
+      document.getElementById("normalizedOutput").value =
+        "Fast QA preset loaded:\n- qa mode: on\n- model: htdemucs_6s\n- scoring: skip\n- audition report: off\n- format: mp3";
+    }
+
+    function applyCpuFastPreset() {
+      applyQuickQaPreset();
+      document.getElementById("demucsDevice").value = "cpu";
+      document.getElementById("demucsJobs").value = suggestedCpuJobs();
+      document.getElementById("normalizedOutput").value =
+        `CPU fast preset loaded:\n- qa mode: on\n- device: cpu\n- jobs: ${document.getElementById("demucsJobs").value}\n- model: htdemucs_6s`;
+    }
+
+    function applyGpuFastPreset() {
+      applyQuickQaPreset();
+      document.getElementById("demucsDevice").value = "cuda";
+      document.getElementById("demucsJobs").value = "";
+      document.getElementById("normalizedOutput").value =
+        "GPU fast preset loaded:\n- qa mode: on\n- device: cuda\n- jobs: auto\n- model: htdemucs_6s";
+    }
+
+    function normalizeAll() {
+      const raw = document.getElementById("rawUrls").value;
+      const clean = document.getElementById("cleanLink").checked;
+      const urls = extractYouTubeUrls(raw);
+      const output = [];
+
+      for (const url of urls) {
+        output.push(clean ? (normalizeYouTubeUrl(url) || `[invalid] ${url}`) : url);
+      }
+
+      document.getElementById("normalizedOutput").value = output.join("\n");
+      return output.filter((value) => value && !value.startsWith("[invalid]"));
+    }
+
+    function queueTracks() {
+      const normalized = normalizeAll();
+      const defaults = currentDefaults();
+
+      if (!normalized.length) {
+        alert("No valid YouTube links found.");
+        return;
+      }
+      if (!defaults.models.length) {
+        alert("Select at least one Demucs model.");
+        return;
+      }
+
+      for (const url of normalized) {
+        state.queue.push({
+          id: crypto.randomUUID(),
+          url,
+          ...defaults,
+        });
+      }
+
+      renderQueue();
+      buildCommands();
+    }
+
+    function renderQueue() {
+      const root = document.getElementById("queueList");
+      root.innerHTML = "";
+      document.getElementById("queueCount").textContent = String(state.queue.length);
+
+      if (!state.queue.length) {
+        root.innerHTML = '<div class="small">Queue is empty.</div>';
+        return;
+      }
+
+      state.queue.forEach((item, index) => {
+        const card = document.createElement("div");
+        card.className = "track-card";
+        card.innerHTML = `
+          <div class="track-top">
+            <div>
+              <div class="track-title">${index + 1}. ${item.url}</div>
+              <div class="small">models: ${item.models.join(", ")} | shifts: ${item.shifts} | overlap: ${item.overlap} | format: ${item.outputFormat}</div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button data-act="up">Up</button>
+              <button data-act="down">Down</button>
+              <button class="danger" data-act="remove">Remove</button>
+            </div>
+          </div>
+          <div class="small mono">python: ${item.pythonPath}\nscript: ${item.scriptPath}</div>
+          <div class="small">device: ${item.demucsDevice || "auto"} | jobs: ${item.demucsJobs || "auto"}</div>
+          <div class="small">mode: ${item.qaMode ? "fast QA" : "normal"} | score: ${item.qaMode ? "qa preset" : item.scoreMode} | audition: ${item.qaMode ? "off" : (item.generateAudition ? "yes" : "no")}${item.openAudition && !item.qaMode ? " / open" : ""}</div>
+        `;
+
+        const [upBtn, downBtn, removeBtn] = card.querySelectorAll("button");
+        upBtn.onclick = () => moveItem(index, -1);
+        downBtn.onclick = () => moveItem(index, 1);
+        removeBtn.onclick = () => removeItem(index);
+        root.appendChild(card);
+      });
+    }
+
+    function moveItem(index, delta) {
+      const target = index + delta;
+      if (target < 0 || target >= state.queue.length) return;
+      [state.queue[index], state.queue[target]] = [state.queue[target], state.queue[index]];
+      renderQueue();
+      buildCommands();
+    }
+
+    function removeItem(index) {
+      state.queue.splice(index, 1);
+      renderQueue();
+      buildCommands();
+    }
+
+    function quote(value) {
+      return '"' + String(value).replace(/"/g, '\\"') + '"';
+    }
+
+    function buildCommands() {
+      const blocks = [];
+
+      for (const item of state.queue) {
+        const parts = [
+          `${quote(item.pythonPath)} ${quote(item.scriptPath)} \``,
+          `  --url ${quote(item.url)} \``,
+          `  --models ${item.models.join(" ")} \``,
+          `  --shifts ${item.shifts} \``,
+          `  --overlap ${item.overlap} \``,
+          `  --sample-rate ${item.sampleRate} \``,
+          `  --output-format ${item.outputFormat}`,
+        ];
+
+        if (item.demucsDevice) parts.push(`  --demucs-device ${item.demucsDevice}`);
+        if (item.demucsJobs) parts.push(`  --demucs-jobs ${item.demucsJobs}`);
+
+        if (item.qaMode) {
+          parts.push(`  --qa-mode`);
+        } else {
+          if (item.scoreMode === "skip") parts.push(`  --skip-scoring`);
+          if (!item.generateAudition) parts.push(`  --skip-audition-report`);
+          if (item.openAudition) parts.push(`  --open-audition-report`);
+        }
+
+        blocks.push(parts.join(" `\n"));
+      }
+
+      document.getElementById("commandOutput").value = blocks.join("\n\n");
+    }
+
+    function downloadText(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function saveQueue() {
+      const payload = {
+        version: 1,
+        created_at: new Date().toISOString(),
+        queue: state.queue,
+      };
+      downloadText("ultimate_stem_lab_queue.json", JSON.stringify(payload, null, 2), "application/json");
+    }
+
+    function loadQueueFromFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          if (!parsed.queue || !Array.isArray(parsed.queue)) {
+            throw new Error("JSON does not contain a queue array.");
+          }
+          state.queue = parsed.queue;
+          renderQueue();
+          buildCommands();
+        } catch (err) {
+          alert("Could not load queue JSON: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    document.getElementById("normalizeBtn").onclick = normalizeAll;
+    document.getElementById("quickQaBtn").onclick = applyQuickQaPreset;
+    document.getElementById("cpuFastBtn").onclick = applyCpuFastPreset;
+    document.getElementById("gpuFastBtn").onclick = applyGpuFastPreset;
+    document.getElementById("queueBtn").onclick = queueTracks;
+    document.getElementById("commandsBtn").onclick = buildCommands;
+    document.getElementById("saveQueueBtn").onclick = saveQueue;
+    document.getElementById("loadQueueBtn").onclick = () => document.getElementById("queueFileInput").click();
+    document.getElementById("queueFileInput").onchange = (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (file) loadQueueFromFile(file);
+    };
+
+    document.getElementById("clearQueueBtn").onclick = () => {
+      if (!confirm("Clear the whole queue?")) return;
+      state.queue = [];
+      renderQueue();
+      buildCommands();
+    };
+
+    document.getElementById("clearFormBtn").onclick = () => {
+      document.getElementById("rawUrls").value = "";
+      document.getElementById("normalizedOutput").value = "";
+    };
+
+    document.getElementById("loadExampleBtn").onclick = () => {
+      document.getElementById("rawUrls").value = [
+        "https://www.youtube.com/watch?v=OGQR3Chf9hE&list=RDOGQR3Chf9hE&start_radio=1",
+        "https://youtu.be/NUs3s3nWXMI?si=demo",
+      ].join("\n");
+      normalizeAll();
+    };
+
+    renderQueue();
+    buildCommands();
+  </script>
+</body>
+</html>
