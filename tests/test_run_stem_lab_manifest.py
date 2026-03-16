@@ -11,8 +11,10 @@ from run_stem_lab import (
     apply_demucs_runtime_args,
     apply_qa_mode,
     build_ytdlp_download_command,
+    demucs_failure_hint,
     manifest_args_snapshot,
     supports_live_progress,
+    validate_demucs_device,
     ytdlp_failure_hint,
 )
 
@@ -119,6 +121,26 @@ class ManifestArgsSnapshotTests(unittest.TestCase):
 
         assert hint is not None
         self.assertIn("JavaScript runtime", hint)
+
+
+    def test_demucs_failure_hint_detects_cpu_only_torch_for_cuda(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "demucs.log"
+            log_path.write_text("AssertionError: Torch not compiled with CUDA enabled\n", encoding="utf-8")
+
+            hint = demucs_failure_hint(log_path, "cuda")
+
+        assert hint is not None
+        self.assertIn("Switch Demucs device to cpu", hint)
+
+    def test_validate_demucs_device_rejects_unavailable_cuda(self) -> None:
+        with unittest.mock.patch("run_stem_lab.subprocess.run") as mocked_run:
+            mocked_run.return_value = Mock(returncode=0, stdout="0", stderr="")
+
+            hint = validate_demucs_device(Path(r"C:\python.exe"), {}, "cuda")
+
+        assert hint is not None
+        self.assertIn("does not support CUDA", hint)
 
 
 if __name__ == "__main__":

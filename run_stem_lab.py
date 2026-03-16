@@ -637,6 +637,39 @@ def ytdlp_failure_hint(log_path: Path) -> str | None:
     return None
 
 
+def demucs_failure_hint(log_path: Path, requested_device: str | None = None) -> str | None:
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+
+    lowered = text.lower()
+    if "torch not compiled with cuda enabled" in lowered:
+        return "CUDA was requested, but the installed PyTorch build does not support CUDA. Switch Demucs device to cpu or install a CUDA-enabled PyTorch build."
+    if "found no nvidia driver" in lowered or "no cuda gpus are available" in lowered:
+        return "CUDA was requested, but no usable NVIDIA CUDA device is available. Switch Demucs device to cpu or fix the GPU driver/runtime."
+    if requested_device and requested_device.lower() == "cuda" and "cuda" in lowered and "error" in lowered:
+        return "Demucs failed while using CUDA. Switching Demucs device to cpu is the fastest way to confirm whether this is a GPU setup issue."
+    return None
+
+
+def validate_demucs_device(pyexe: Path, env: dict[str, str], requested_device: str | None) -> str | None:
+    if (requested_device or "").lower() != "cuda":
+        return None
+
+    cmd = [
+        str(pyexe),
+        "-c",
+        "import torch,sys; sys.stdout.write('1' if torch.cuda.is_available() else '0')",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    if result.returncode != 0:
+        return "CUDA was requested, but Torch could not be validated in the selected Python environment. Switch Demucs device to cpu or repair the Torch install."
+    if result.stdout.strip() != "1":
+        return "CUDA was requested, but the installed PyTorch build does not support CUDA on this machine. Switch Demucs device to cpu or install a CUDA-enabled PyTorch build."
+    return None
+
+
 def summary_text(
     project_slug: str,
     created_at: str,
@@ -744,9 +777,24 @@ def main() -> int:
         console.print("[yellow][!][/yellow] QA mode active: using the fast split preset and skipping downstream review stages.")
 
     # Verify tools explicitly.
-    verify_tool([str(ffmpeg_path), "-version"], env, "ffmpeg")
-    verify_tool([str(pyexe), "-m", "yt_dlp", "--version"], env, "yt-dlp")
-    verify_tool([str(pyexe), "-m", "demucs", "--help"], env, "demucs")
+    try:
+        verify_tool([str(ffmpeg_path), "-version"], env, "ffmpeg")
+        verify_tool([str(pyexe), "-m", "yt_dlp", "--version"], env, "yt-dlp")
+        verify_tool([str(pyexe), "-m", "demucs", "--help"], env, "demucs")
+    except FileNotFoundError:
+        emit_failure_context(
+            "tool verification",
+            hint="A required local tool is missing. Run install_ultimate_stem_lab.bat or bootstrap_ultimate_stem_lab.py first.",
+        )
+        return 1
+    except RuntimeError as exc:
+        emit_failure_context("tool verification", hint=str(exc))
+        return 1
+
+    demucs_device_hint = validate_demucs_device(pyexe, env, args.demucs_device)
+    if demucs_device_hint:
+        emit_failure_context("demucs preflight", hint=demucs_device_hint)
+        return 1
 
     created_at = now_iso()
     initial_paths = project_dirs(PROJECT_ROOT, slugify(args.project_slug, fallback="downloaded_track"))
@@ -892,7 +940,8 @@ def main() -> int:
                     )
                 )
             except subprocess.CalledProcessError:
-                emit_failure_context(f"demucs {model}", log_file)
+                hint = demucs_failure_hint(log_file, args.demucs_device)
+                emit_failure_context(f"demucs {model}", log_file, hint)
                 model_output_dir = project_paths["runs"] / model / working_wav.stem
                 stems = collect_stems(model_output_dir)
                 failed_runs.append(
@@ -908,6 +957,9 @@ def main() -> int:
                 )
         stage_progress.advance(stage_task)
 
+        if not successful_runs:
+            console.print("[red][!][/red] No Demucs runs completed successfully.")
+            return 1
 
         # Stage 7: scoring
         score_outputs = {}
@@ -942,9 +994,15 @@ def main() -> int:
                         "report": str(project_paths["root"] / "final" / "stem_selection_report_v2.txt"),
                     }
                 except subprocess.CalledProcessError:
-                    console.print(f"[yellow][!][/yellow] Scoring failed. Check log: {score_log}")
+                    emit_failure_context(
+                        "score stems",
+                        score_log,
+                        hint="Scoring could not find usable stem outputs. This usually means Demucs failed or produced no supported stem files.",
+                    )
+                    return 1
             else:
-                console.print(f"[yellow][!][/yellow] Score script not found: {score_script}")
+                emit_failure_context("score stems", hint=f"Score script not found: {score_script}")
+                return 1
         stage_progress.advance(stage_task)
 
         # Stage 8: audition report
@@ -975,9 +1033,11 @@ def main() -> int:
                     )
                     audition_report_path = str(project_paths["reports"] / "audition_report.html")
                 except subprocess.CalledProcessError:
-                    console.print(f"[yellow][!][/yellow] Audition report generation failed. Check log: {audition_log}")
+                    emit_failure_context("audition report", audition_log)
+                    return 1
             else:
-                console.print(f"[yellow][!][/yellow] Audition script not found: {audition_script}")
+                emit_failure_context("audition report", hint=f"Audition script not found: {audition_script}")
+                return 1
         stage_progress.advance(stage_task)
 
         # Stage 9: summary + manifest
