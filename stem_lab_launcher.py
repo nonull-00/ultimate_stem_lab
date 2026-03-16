@@ -53,6 +53,7 @@ RESULT_LINE_PREFIXES = {
     "[+] Audition report written: ": "audition_report",
     "[!] Failure stage: ": "failure_stage",
     "[!] Failure log: ": "failure_log",
+    "[!] Failure hint: ": "failure_hint",
 }
 
 
@@ -146,6 +147,79 @@ def open_local_path(raw_path: str, root_dir: Path) -> None:
         subprocess.Popen(["xdg-open", str(path)])
 
 
+def run_preflight_command(cmd: list[str], cwd: Path) -> tuple[bool, str]:
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            errors="replace",
+        )
+    except FileNotFoundError:
+        return False, "missing"
+    except Exception as exc:
+        return False, str(exc)
+
+    output = ((result.stdout or "") + (result.stderr or "")).strip()
+    if result.returncode != 0:
+        return False, output or f"exit {result.returncode}"
+    first_line = output.splitlines()[0] if output else "ok"
+    return True, first_line
+
+
+def collect_preflight_status(root_dir: Path, python_path: Path, script_path: Path) -> dict[str, Any]:
+    ffmpeg_path = root_dir / "ultimate_stem_lab" / "tools" / "ffmpeg" / "bin" / "ffmpeg.exe"
+    checks: list[dict[str, str]] = []
+
+    def add_check(name: str, ok: bool, detail: str) -> None:
+        checks.append(
+            {
+                "name": name,
+                "status": "ok" if ok else "fail",
+                "detail": detail,
+            }
+        )
+
+    add_check("python", python_path.exists(), str(python_path if python_path.exists() else "missing"))
+    add_check("run script", script_path.exists(), str(script_path if script_path.exists() else "missing"))
+    add_check("ffmpeg", ffmpeg_path.exists(), str(ffmpeg_path if ffmpeg_path.exists() else "missing"))
+
+    if python_path.exists():
+        ok, detail = run_preflight_command([str(python_path), "--version"], root_dir)
+        add_check("python version", ok, detail)
+
+        ok, detail = run_preflight_command([str(python_path), "-m", "yt_dlp", "--version"], root_dir)
+        add_check("yt-dlp", ok, detail)
+
+        ok, detail = run_preflight_command([str(python_path), "-m", "demucs", "--help"], root_dir)
+        add_check("demucs", ok, detail)
+
+        ok, detail = run_preflight_command(
+            [
+                str(python_path),
+                "-c",
+                "import torch,sys; sys.stdout.write('cuda' if torch.cuda.is_available() else 'cpu')",
+            ],
+            root_dir,
+        )
+        add_check("torch device", ok, detail)
+
+    cuda_check = next((item for item in checks if item["name"] == "torch device"), None)
+    if cuda_check and cuda_check["status"] == "ok" and cuda_check["detail"] == "cuda":
+        gpu_advice = "CUDA-ready Torch detected. GPU fast preset should work if your NVIDIA stack stays available."
+    else:
+        gpu_advice = "This install is currently CPU-only. Use CPU fast preset unless you intentionally install CUDA-enabled Torch."
+
+    return {
+        "ok": all(item["status"] == "ok" for item in checks),
+        "checks": checks,
+        "gpu_advice": gpu_advice,
+        "python_path": str(python_path),
+        "script_path": str(script_path),
+    }
+
+
 @dataclass
 class Job:
     id: str
@@ -230,6 +304,8 @@ class AppState:
     html_path: Path
     host: str
     port: int
+    python_path: Path = field(default_factory=Path)
+    script_path: Path = field(default_factory=Path)
     jobs: list[Job] = field(default_factory=list)
     current_index: int = -1
     current_job_id: str | None = None
@@ -280,6 +356,8 @@ class AppState:
                 "port": self.port,
                 "html_path": str(self.html_path),
                 "root_dir": str(self.root_dir),
+                "python_path": str(self.python_path),
+                "script_path": str(self.script_path),
             }
 
 
@@ -463,6 +541,16 @@ def make_handler(state: AppState, runner: QueueRunner):
                 self._send_json(state.snapshot())
                 return
 
+            if self.path == "/api/preflight":
+                self._send_json(
+                    collect_preflight_status(
+                        state.root_dir,
+                        state.python_path,
+                        state.script_path,
+                    )
+                )
+                return
+
             if self.path.startswith("/api/open_path"):
                 parsed = urlparse(self.path)
                 target = unquote(parsed.query.partition("path=")[2]).strip()
@@ -547,6 +635,11 @@ def write_api_enabled_html(original_html: Path, target_html: Path) -> None:
         <button class="good" id="startQueueBtn">Start queued jobs here</button>
         <button class="danger" id="stopQueueBtn">Stop current run</button>
         <button id="refreshStatusBtn">Refresh status</button>
+        <button id="refreshPreflightBtn">Refresh preflight</button>
+      </div>
+      <div>
+        <label for="launcherPreflightOutput">Install / GPU preflight</label>
+        <textarea id="launcherPreflightOutput" class="output mono" readonly></textarea>
       </div>
       <div>
         <label for="launcherStatusOutput">Live status / recent output</label>
@@ -580,6 +673,7 @@ def write_api_enabled_html(original_html: Path, target_html: Path) -> None:
     };
 
     document.getElementById("refreshStatusBtn").onclick = refreshLauncherStatus;
+    document.getElementById("refreshPreflightBtn").onclick = refreshLauncherPreflight;
   }
 
   async function openPath(path) {
@@ -590,6 +684,21 @@ def write_api_enabled_html(original_html: Path, target_html: Path) -> None:
 
   async function copyPath(path) {
     await navigator.clipboard.writeText(path);
+  }
+
+  function friendlyFailureMessage(outputs) {
+    const hint = outputs.failure_hint || "";
+    const stage = outputs.failure_stage || "";
+    if (hint.includes("Torch") && hint.includes("CUDA")) {
+      return "GPU mode is enabled, but this install only supports CPU. Use CPU fast preset or set Demucs device to cpu.";
+    }
+    if (stage === "demucs preflight" && hint.includes("CUDA")) {
+      return "GPU mode is enabled, but this install only supports CPU. Use CPU fast preset or set Demucs device to cpu.";
+    }
+    if (stage === "tool verification" && hint.includes("install_ultimate_stem_lab.bat")) {
+      return "Install looks incomplete. Run install_ultimate_stem_lab.bat first, then relaunch the queue.";
+    }
+    return hint;
   }
 
   function renderResultCards(data) {
@@ -611,6 +720,7 @@ def write_api_enabled_html(original_html: Path, target_html: Path) -> None:
     jobs.forEach((job, index) => {
       const outputs = job.outputs || {};
       const statusLabel = job.stopped_by_user ? "stopped" : (job.returncode === 0 ? "success" : "failed");
+      const friendlyHint = friendlyFailureMessage(outputs);
       const card = document.createElement("div");
       card.className = "track-card";
       card.innerHTML = `
@@ -622,6 +732,7 @@ def write_api_enabled_html(original_html: Path, target_html: Path) -> None:
         </div>
         <div class="small mono">${(job.command || []).join(" ")}</div>
         <div class="small">stage: ${outputs.failure_stage || (job.returncode === 0 ? "completed" : "unknown failure")}</div>
+        ${friendlyHint ? `<div class="small">${friendlyHint}</div>` : ""}
         <div class="small mono">${outputs.project_dir ? `project: ${outputs.project_dir}` : "project path not captured"}</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
           ${outputs.project_dir ? '<button data-path-kind="project_dir">Open project</button><button data-copy-kind="project_dir">Copy project path</button>' : ""}
@@ -660,6 +771,31 @@ def write_api_enabled_html(original_html: Path, target_html: Path) -> None:
     });
   }
 
+  async function refreshLauncherPreflight() {
+    const out = document.getElementById("launcherPreflightOutput");
+    if (!out) return;
+
+    try {
+      const res = await fetch("/api/preflight");
+      const data = await res.json();
+      const lines = [];
+      lines.push(`overall: ${data.ok ? "ready" : "needs attention"}`);
+      lines.push(`python_path: ${data.python_path || ""}`);
+      lines.push(`script_path: ${data.script_path || ""}`);
+      lines.push("");
+      (data.checks || []).forEach((check) => {
+        lines.push(`${check.status}: ${check.name} -> ${check.detail}`);
+      });
+      if (data.gpu_advice) {
+        lines.push("");
+        lines.push(`gpu_advice: ${data.gpu_advice}`);
+      }
+      out.value = lines.join("\n");
+    } catch (err) {
+      out.value = "Preflight fetch failed: " + err.message;
+    }
+  }
+
   async function refreshLauncherStatus() {
     const out = document.getElementById("launcherStatusOutput");
     if (!out) return;
@@ -693,6 +829,7 @@ def write_api_enabled_html(original_html: Path, target_html: Path) -> None:
 
   window.addEventListener("load", () => {
     appendStatusPanel();
+    refreshLauncherPreflight();
     refreshLauncherStatus();
     setInterval(refreshLauncherStatus, 2000);
   });
@@ -736,6 +873,8 @@ def main() -> int:
         html_path=served_html,
         host=args.host,
         port=args.port,
+        python_path=safe_resolve(args.python_path, root_dir),
+        script_path=safe_resolve(args.script_path, root_dir),
     )
 
     runner = QueueRunner(state)

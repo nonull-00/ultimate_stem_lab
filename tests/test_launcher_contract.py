@@ -13,6 +13,7 @@ from stem_lab_launcher import (
     Job,
     QueueRunner,
     ThreadingHTTPServer,
+    collect_preflight_status,
     extract_result_paths,
     make_handler,
 )
@@ -63,6 +64,17 @@ class LauncherContractTests(unittest.TestCase):
 
         self.assertEqual(outputs["failure_stage"], "download")
         self.assertTrue(outputs["failure_log"].endswith(r"logs\yt_dlp.log"))
+
+    def test_extract_result_paths_reads_failure_hint(self) -> None:
+        outputs = extract_result_paths(
+            [
+                "[!] Failure stage: demucs preflight",
+                "[!] Failure hint: CUDA was requested, but the installed PyTorch build does not support CUDA on this machine.",
+            ]
+        )
+
+        self.assertEqual(outputs["failure_stage"], "demucs preflight")
+        self.assertIn("does not support CUDA", outputs["failure_hint"])
 
     def test_from_payload_ignores_unknown_fields(self) -> None:
         job = Job.from_payload(
@@ -309,6 +321,66 @@ class LauncherContractTests(unittest.TestCase):
 
                 self.assertTrue(body["ok"])
                 mocked_open.assert_called_once()
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_collect_preflight_status_marks_cpu_only_torch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            python_path = root / "python.exe"
+            script_path = root / "run_stem_lab.py"
+            ffmpeg_path = root / "ultimate_stem_lab" / "tools" / "ffmpeg" / "bin" / "ffmpeg.exe"
+            ffmpeg_path.parent.mkdir(parents=True, exist_ok=True)
+            python_path.write_text("", encoding="utf-8")
+            script_path.write_text("", encoding="utf-8")
+            ffmpeg_path.write_text("", encoding="utf-8")
+
+            with patch("stem_lab_launcher.run_preflight_command") as mocked_run:
+                mocked_run.side_effect = [
+                    (True, "Python 3.13.3"),
+                    (True, "2026.03.13"),
+                    (True, "usage: demucs.separate"),
+                    (True, "cpu"),
+                ]
+                payload = collect_preflight_status(root, python_path, script_path)
+
+        self.assertTrue(payload["ok"])
+        self.assertIn("CPU-only", payload["gpu_advice"])
+
+    def test_api_preflight_returns_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state = AppState(
+                root_dir=root,
+                html_path=root / "index.html",
+                host="127.0.0.1",
+                port=0,
+                python_path=root / "python.exe",
+                script_path=root / "run_stem_lab.py",
+            )
+            runner = QueueRunner(state)
+            server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(state, runner))
+            host, port = server.server_address
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+
+            try:
+                with patch("stem_lab_launcher.collect_preflight_status") as mocked_preflight:
+                    mocked_preflight.return_value = {
+                        "ok": False,
+                        "checks": [{"name": "ffmpeg", "status": "fail", "detail": "missing"}],
+                        "gpu_advice": "Use CPU fast preset.",
+                        "python_path": str(root / "python.exe"),
+                        "script_path": str(root / "run_stem_lab.py"),
+                    }
+                    with urlopen(f"http://{host}:{port}/api/preflight", timeout=5) as response:
+                        body = json.loads(response.read().decode("utf-8"))
+
+                self.assertFalse(body["ok"])
+                self.assertEqual(body["checks"][0]["name"], "ffmpeg")
+                self.assertIn("CPU fast preset", body["gpu_advice"])
             finally:
                 server.shutdown()
                 server.server_close()

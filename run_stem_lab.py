@@ -619,7 +619,7 @@ def emit_failure_context(stage: str, log_path: Path | None = None, hint: str | N
     if log_path is not None:
         console.print(f"[red][!][/red] Failure log: {log_path}")
     if hint:
-        console.print(f"[yellow][!][/yellow] {hint}")
+        console.print(f"[yellow][!][/yellow] Failure hint: {hint}")
 
 
 def ytdlp_failure_hint(log_path: Path) -> str | None:
